@@ -11,6 +11,7 @@ from multiprocessing import Pool
 global total
 total = 1
 q = Queue()
+buffer = Queue()
 before_time_proxies=0
 myclient = pymongo.MongoClient("mongodb://localhost:27017/")
 mydb = myclient['bilibili-fans']
@@ -26,6 +27,14 @@ class MyThread(threading.Thread):
     def run(self):
         self.func()
 
+class Thread_insert(threading.Thread):
+    def __init__(self,func,name=''):
+        threading.Thread.__init__(self)
+        self.func = func
+        self.name = name
+
+    def run(self):
+        self.func()
 
 def get_proxies_2():
     url = "https://proxy.horocn.com/api/proxies?order_id=TRJ61638848116791140&num=1&format=json&line_separator=win&can_repeat=no"
@@ -102,12 +111,18 @@ def spider_all():
                     mydict['fannum'] = fannum
                     mydict['name'] = Name
                     mydict['num'] = int(number)
-                    print("编号: " + str(number) + "昵称：" + str(Name) + "粉丝数量：" + str(fannum))
-                    mycol.insert_one(mydict)
+                    buffer.put(mydict)
+                    # print("编号: " + str(number) + "昵称：" + str(Name) + "粉丝数量：" + str(fannum))
+                    # mycol.insert_one(mydict)
         else:
             break
     return
 
+def insert_data():
+    while (~buffer.empty()):
+        mydict = buffer.get(1)
+        mycol.insert_one(mydict)
+        print("编号: " + str(mydict['num']) + "昵称：" + str(mydict['name']) + "粉丝数量：" + str( mydict['fannum']))
 # def spider_all():
 #     while True:
 #         if (~q.empty()):
@@ -131,17 +146,22 @@ if __name__ == '__main__':
         q.put(i)
     print("开始执行")
     threads = []
+    threads_insert = []
     nloops = range(len(loops))
     for i in nloops:
         t = MyThread(spider_all,spider_all.__name__)
+        t2 = Thread_insert(insert_data,insert_data.__name__)
         threads.append(t)
+        threads_insert.append(t2)
 
     for i in nloops:
         time.sleep(10)
         threads[i].start()
+        threads_insert[i].start()
 
     for i in nloops:
         threads[i].join()
+        threads_insert[i].join()
     # proxies = {
     #     "http":"http://59.33.136.130:28526",
     #     "https":"https://59.33.136.130:28526",
